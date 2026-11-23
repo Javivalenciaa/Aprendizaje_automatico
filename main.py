@@ -11,16 +11,16 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from nn.red import crear_mlp, guardar
-from nn.optimizadores import Adam
+from nn.optimizadores import SGD
 from nn.entrenar import entrenar
 from datos.preparar import cargar_segmentos, ajustar_normalizacion, normalizar
 from datos.metricas import accuracy, matriz_confusion, precision_recall_f1, votar_por_cancion
 
 OCULTAS = [128, 64]
-LR = 1e-3
+LR = 0.01
 L2 = 1e-3
 EPOCAS = 300
-PACIENCIA = 15
+PACIENCIA = 30
 
 d = cargar_segmentos()
 generos = d["generos"]
@@ -33,7 +33,7 @@ print(f"trozos de 3 s -> entrenamiento {len(ytr)} · validacion {len(yva)} · te
 
 def entrenar_modelo(ocultas):
     red = crear_mlp(Xtr.shape[1], ocultas, C)
-    hist = entrenar(red, Adam(lr=LR), Xtr, ytr, Xva, yva,
+    hist = entrenar(red, SGD(lr=LR), Xtr, ytr, Xva, yva,
                     epocas=EPOCAS, l2=L2, paciencia=PACIENCIA, verbose=True)
     return red, hist
 

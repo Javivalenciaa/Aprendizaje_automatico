@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from nn.red import crear_mlp, cargar_pesos
-from nn.optimizadores import Adam
+from nn.optimizadores import SGD
 from nn.entrenar import entrenar
 from nn.perdidas import softmax
 from datos.audio import cargar_centro, rasgos_segmentos, espectrograma
@@ -351,8 +351,8 @@ def evaluar_modelo():
     real, pred = votar_por_cancion(red.predecir_proba(Xte), d["cte"], d["yte"])
     M = matriz_confusion(real, pred, C)
     lineal = crear_mlp(40, [], C)
-    entrenar(lineal, Adam(lr=1e-3), Xtr, d["ytr"], Xva, d["yva"], epocas=300,
-             l2=1e-3, paciencia=15)
+    entrenar(lineal, SGD(lr=0.01), Xtr, d["ytr"], Xva, d["yva"], epocas=300,
+             l2=1e-3, paciencia=30)
     real, pred = votar_por_cancion(lineal.predecir_proba(Xte), d["cte"], d["yte"])
     return M, np.trace(M) / M.sum(), (real == pred).mean(), len(real), len(d["ytr"])
 
