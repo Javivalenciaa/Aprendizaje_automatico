@@ -18,3 +18,12 @@ def precision_recall_f1(M):
     recall = diag / np.maximum(M.sum(axis=1), 1)
     f1 = 2 * precision * recall / np.maximum(precision + recall, 1e-12)
     return precision, recall, f1
+
+
+def votar_por_cancion(P, cancion, y):
+    """P: probabilidades de cada trozo. Promedia las de cada cancion y devuelve
+    (genero real, genero predicho) de cada cancion."""
+    ids = np.unique(cancion)
+    pred = np.array([P[cancion == i].mean(axis=0).argmax() for i in ids])
+    real = np.array([y[cancion == i][0] for i in ids])
+    return real, pred

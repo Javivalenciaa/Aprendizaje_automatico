@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from nn.red import crear_mlp, cargar_pesos
-from datos.audio import rasgos_librosa, espectrograma
+from datos.audio import cargar_centro, rasgos_segmentos, espectrograma
 from datos.preparar import normalizar
 
 ICONOS = {"blues": "🎷", "classical": "🎻", "country": "🤠", "disco": "🪩",
@@ -42,7 +42,7 @@ def cargar_modelo():
 def dibujar_espectrograma(ruta):
     import librosa
     import matplotlib.pyplot as plt
-    senal, sr = librosa.load(ruta, sr=22050, duration=30)
+    senal, sr = cargar_centro(ruta)
     S = np.log1p(espectrograma(senal)).T
     fig, ax = plt.subplots(figsize=(8, 2.6))
     ax.imshow(S, origin="lower", aspect="auto", cmap="magma",
@@ -58,14 +58,15 @@ red, mu, sigma, generos = cargar_modelo()
 with st.sidebar:
     st.header("🎧 Cómo funciona")
     st.markdown(
-        "1. La canción se resume en **40 números** (rasgos MFCC: media y "
-        "desviación de 20 coeficientes).\n"
+        "1. Se cogen **30 s del centro** de la canción y se cortan en **trozos "
+        "de 3 s**. Cada trozo se resume en **40 números** (rasgos MFCC).\n"
         "2. Se **normalizan** con la media y la desviación del entrenamiento.\n"
-        "3. Una **red neuronal hecha a mano** (40 → 64 → 32 → 10) da una "
-        "probabilidad para cada género.")
+        "3. Una **red neuronal hecha a mano** (40 → 128 → 64 → 10) da una "
+        "probabilidad para cada género a cada trozo.\n"
+        "4. Se **promedian** las probabilidades de todos los trozos.")
     st.subheader("Géneros que conoce")
     st.markdown("  \n".join(f"{ICONOS.get(g, '🎵')} {g}" for g in generos))
-    st.caption("Solo acepta .wav, analiza como mucho 30 segundos y siempre "
+    st.caption("Solo acepta .wav, analiza 30 segundos del centro y siempre "
                "elige uno de estos 10 géneros.")
 
 st.title("🎶 ¿De qué género es tu canción?")
@@ -82,8 +83,9 @@ else:
         ruta = f.name
 
     with st.spinner("Escuchando la canción..."):
-        x = normalizar(rasgos_librosa(ruta)[None, :], mu, sigma)
-        p = red.predecir_proba(x)[0]
+        senal, _ = cargar_centro(ruta)
+        x = normalizar(rasgos_segmentos(senal), mu, sigma)   # un fila por trozo de 3 s
+        p = red.predecir_proba(x).mean(axis=0)               # media de todos los trozos
     mejor = int(p.argmax())
 
     st.markdown(f"""
