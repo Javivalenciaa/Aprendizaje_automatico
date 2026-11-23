@@ -46,7 +46,7 @@ st.markdown("""
 def cargar_modelo():
     d = np.load("modelo.npz", allow_pickle=False)
     generos = d["generos"]
-    red = crear_mlp(40, d["ocultas"].tolist(), len(generos))
+    red = crear_mlp(len(d["mu"]), d["ocultas"].tolist(), len(generos))
     cargar_pesos(red, "modelo.npz")
     return red, d["mu"], d["sigma"], generos, d["ocultas"].tolist()
 
@@ -63,13 +63,13 @@ def es_lineal(capa):
 # ---------------------------------------------------------------- analisis
 def analizar(contenido):
     """Carga 30 s del centro de la cancion, la corta en trozos de 3 s y saca
-    40 rasgos de cada trozo."""
+    43 rasgos de cada trozo (40 de timbre y 3 de ritmo)."""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         f.write(contenido)
         ruta = f.name
     senal, sr = cargar_centro(ruta)
     os.remove(ruta)
-    S = rasgos_segmentos(senal, sr)                 # (trozos x 40)
+    S = rasgos_segmentos(senal, sr)                 # (trozos x 43)
     X = normalizar(S, mu, sigma)
     P = red.predecir_proba(X)                       # probabilidades por trozo
     return dict(senal=senal, sr=sr, S=S, X=X, P=P, n=len(S))
@@ -118,7 +118,7 @@ def paso(texto):
 # ------------------------------------------------------------------ cabecera
 with st.sidebar:
     st.header("🎧 El modelo")
-    arq = " → ".join(["40"] + [str(o) for o in ocultas] + [str(C)])
+    arq = " → ".join([str(len(mu))] + [str(o) for o in ocultas] + [str(C)])
     st.markdown(f"**Red:** {arq}  \n**Pesos y sesgos:** {n_pesos:,}".replace(",", "."))
     st.markdown("**Géneros:**  \n" +
                 "  \n".join(f"{ICONOS.get(g, '🎵')} {g}" for g in generos))
@@ -152,7 +152,7 @@ with t1:
         st.markdown("""
 **El recorrido completo**
 
-`audio` → `30 s del centro` → `10 trozos de 3 s` → `40 rasgos por trozo` →
+`audio` → `30 s del centro` → `10 trozos de 3 s` → `43 rasgos por trozo (timbre + ritmo)` →
 `normalizar` → `capa 1 + ReLU` → `capa 2 + ReLU` → `capa de salida` →
 `softmax` → `media de los 10 trozos` → `género`
 """)
@@ -194,9 +194,10 @@ with t2:
     else:
         paso("<b>Qué ves:</b> de cada trozo se sacan <b>20 números (MFCC)</b> que describen la "
              "forma de su espectro, de lo general a lo fino. Para cada MFCC se calcula la "
-             "<b>media</b> y la <b>desviación</b> a lo largo del trozo: 20 + 20 = <b>40 rasgos</b>. "
+             "<b>media</b> y la <b>desviación</b> a lo largo del trozo: 20 + 20 = <b>40 rasgos de timbre</b>. "
              "Antes se <b>iguala el volumen</b> del trozo y se descarta el MFCC 0, que solo mide "
-             "lo fuerte que suena: así una canción más alta no parece de otro género.")
+             "lo fuerte que suena. A esos 40 se suman <b>3 rasgos de ritmo</b>: el tempo (pulsos "
+             "por minuto) y cuánta actividad rítmica hay (media y desviación). Total: <b>43 rasgos</b>.")
         mf = mfcc_trozo(datos, k)
         fig, ax = plt.subplots(figsize=(10, 2.8))
         im = ax.imshow(mf, origin="lower", aspect="auto", cmap="RdBu_r")
@@ -210,24 +211,28 @@ with t2:
             st.pyplot(barras_con_signo(datos["S"][k][:20], "20 rasgos: MEDIA de cada MFCC"))
         with c2:
             st.pyplot(barras_con_signo(datos["S"][k][20:], "20 rasgos: DESVIACIÓN de cada MFCC"))
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Tempo de la canción", f"{datos['S'][k][42]:.0f} BPM")
+        r2.metric("Actividad rítmica (media)", f"{datos['S'][k][40]:.2f}")
+        r3.metric("Actividad rítmica (desviación)", f"{datos['S'][k][41]:.2f}")
         st.markdown("**Todos los trozos:** cada fila es un trozo de 3 s y cada columna un rasgo.")
         fig, ax = plt.subplots(figsize=(10, 2.6))
         im = ax.imshow(datos["X"], aspect="auto", cmap="RdBu_r", vmin=-3, vmax=3)
         ax.set_yticks(range(datos["n"]))
         ax.set_yticklabels(range(1, datos["n"] + 1), fontsize=7)
-        ax.set_xlabel("rasgo (0-19 medias, 20-39 desviaciones)")
+        ax.set_xlabel("rasgo (0-19 medias · 20-39 desviaciones · 40-42 ritmo)")
         ax.set_ylabel("trozo")
         fig.colorbar(im, ax=ax, fraction=.03)
         fig.tight_layout()
         st.pyplot(fig)
-        st.success(f"Una canción de 30 s se queda en una tabla de {datos['n']} × 40 números.")
+        st.success(f"Una canción de 30 s se queda en una tabla de {datos['n']} × 43 números.")
 
 # ------------------------------------------------------------------- tab 3
 with t3:
     if datos is None:
         st.info(SIN_CANCION)
     else:
-        paso("<b>Qué ves:</b> los 40 rasgos tienen escalas muy distintas. Se normalizan con la "
+        paso("<b>Qué ves:</b> los 43 rasgos tienen escalas muy distintas. Se normalizan con la "
              "<b>media y la desviación de los trozos de entrenamiento</b> (guardadas en "
              "<code>modelo.npz</code>): <code>(x − media) / desviación</code>. Siempre las del "
              "entrenamiento, nunca unas calculadas con la canción nueva.")
@@ -237,12 +242,13 @@ with t3:
         with c2:
             st.pyplot(barras_con_signo(datos["X"][k], "Después: rasgos normalizados", alto=2.8))
         nombres = [f"media MFCC {i + 1}" for i in range(20)] + \
-                  [f"desv. MFCC {i + 1}" for i in range(20)]
+                  [f"desv. MFCC {i + 1}" for i in range(20)] + \
+                  ["actividad rítmica (media)", "actividad rítmica (desv.)", "tempo (BPM)"]
         tabla = pd.DataFrame({"rasgo": nombres, "valor": datos["S"][k],
                               "media del entrenamiento": mu,
                               "desviación del entrenamiento": sigma,
                               "normalizado": datos["X"][k]}).round(2)
-        with st.expander("Ver la cuenta de los 40 rasgos"):
+        with st.expander("Ver la cuenta de los 43 rasgos"):
             st.dataframe(tabla, hide_index=True)
 
 # ------------------------------------------------------------------- tab 4
@@ -255,7 +261,7 @@ with t4:
              "calcula, para cada neurona, <code>entrada · pesos + sesgo</code>. Cada "
              "<b>ReLU</b> deja pasar los positivos y pone a 0 los negativos "
              "(neurona apagada). Verde = positivo, naranja = negativo.")
-        entrada = 40
+        entrada = len(mu)
         lineales = [c for c in red.capas if es_lineal(c)]
         for tipo, n, valores, capa in etapas:
             if tipo == "lineal":
@@ -350,7 +356,7 @@ def evaluar_modelo():
     Xtr, Xva, Xte = (normalizar(d[q], mu, sigma) for q in ("Xtr", "Xva", "Xte"))
     real, pred = votar_por_cancion(red.predecir_proba(Xte), d["cte"], d["yte"])
     M = matriz_confusion(real, pred, C)
-    lineal = crear_mlp(40, [], C)
+    lineal = crear_mlp(len(mu), [], C)
     entrenar(lineal, Adam(lr=1e-3), Xtr, d["ytr"], Xva, d["yva"], epocas=300,
              l2=1e-3, paciencia=15)
     real, pred = votar_por_cancion(lineal.predecir_proba(Xte), d["cte"], d["yte"])
@@ -405,7 +411,7 @@ with t6:
         st.markdown("""
 **Límites que conviene decir en voz alta**
 - Se entrenó con GTZAN: 1.000 clips de 30 s de música de los 90-2000. La música moderna (otra producción, otros estilos) se parece menos a lo que vio y la red duda más.
-- El rock es el género más difícil: se confunde con country, blues y disco.
+- El rock es el género más difícil: la red lo reparte entre blues, pop, country y metal (solo acierta 2 de 15).
 - Los 10 géneros son los únicos que conoce: siempre elige uno de ellos.
 
 **Cómo leerlo**

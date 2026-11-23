@@ -21,22 +21,31 @@ def cargar_centro(ruta, sr=22050, duracion=30):
 
 
 def rasgos_segmentos(senal, sr=22050, seg=3):
-    """Corta la cancion en trozos de 'seg' segundos y saca 40 rasgos por trozo.
+    """Corta la cancion en trozos de 'seg' segundos y saca 43 rasgos por trozo.
 
-    - Se iguala el volumen de cada trozo (si no, una cancion mas fuerte
-      parece de otro genero).
-    - Se calculan 21 MFCC y se tira el primero (solo mide el volumen).
-    - Rasgos = media y desviacion de los 20 MFCC restantes: 20 + 20 = 40.
-    Devuelve una matriz (numero de trozos x 40).
+    Timbre (40): se iguala el volumen del trozo, se calculan 21 MFCC, se tira
+    el primero (solo mide el volumen) y se guardan la media y la desviacion
+    de los 20 restantes.
+    Ritmo (3): cuanta "actividad ritmica" hay en el trozo (media y desviacion
+    de la fuerza de los golpes) y el tempo de la cancion en pulsos por minuto.
+    Devuelve una matriz (numero de trozos x 43).
     """
     import librosa
+
+    def igualar(t):
+        return t / (np.sqrt(np.mean(t ** 2)) + 1e-9)
+
+    golpes = librosa.onset.onset_strength(y=igualar(senal), sr=sr)
+    calcular_tempo = getattr(librosa.feature, "tempo", None) or librosa.beat.tempo
+    bpm = float(calcular_tempo(onset_envelope=golpes, sr=sr)[0])
     n = int(seg * sr)
     filas = []
     for i in range(len(senal) // n):
-        trozo = senal[i * n:(i + 1) * n]
-        trozo = trozo / (np.sqrt(np.mean(trozo ** 2)) + 1e-9)
+        trozo = igualar(senal[i * n:(i + 1) * n])
         mfcc = librosa.feature.mfcc(y=trozo, sr=sr, n_mfcc=21)[1:]
-        filas.append(np.concatenate([mfcc.mean(axis=1), mfcc.std(axis=1)]))
+        o = librosa.onset.onset_strength(y=trozo, sr=sr)
+        filas.append(np.concatenate([mfcc.mean(axis=1), mfcc.std(axis=1),
+                                     [o.mean(), o.std(), bpm]]))
     return np.array(filas)
 
 
