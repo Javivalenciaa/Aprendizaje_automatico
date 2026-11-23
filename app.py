@@ -34,7 +34,7 @@ st.markdown("""
 def cargar_modelo():
     d = np.load("modelo.npz", allow_pickle=False)
     generos = d["generos"]
-    red = crear_mlp(len(d["mu"]), d["ocultas"].tolist(), len(generos))
+    red = crear_mlp(40, d["ocultas"].tolist(), len(generos))
     cargar_pesos(red, "modelo.npz")
     return red, d["mu"], d["sigma"], generos
 
@@ -59,9 +59,9 @@ with st.sidebar:
     st.header("🎧 Cómo funciona")
     st.markdown(
         "1. Se cogen **30 s del centro** de la canción y se cortan en **trozos "
-        "de 3 s**. Cada trozo se resume en **43 números** (40 de timbre y 3 de ritmo).\n"
+        "de 3 s**. Cada trozo se resume en **40 números** (rasgos MFCC).\n"
         "2. Se **normalizan** con la media y la desviación del entrenamiento.\n"
-        "3. Una **red neuronal hecha a mano** (43 → 128 → 64 → 10) da una "
+        "3. Una **red neuronal hecha a mano** (40 → 128 → 64 → 10) da una "
         "probabilidad para cada género a cada trozo.\n"
         "4. Se **promedian** las probabilidades de todos los trozos.")
     st.subheader("Géneros que conoce")
