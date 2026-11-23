@@ -11,7 +11,7 @@ class Lineal:
         self.W = rng.standard_normal((n_in, n_out))*np.sqrt(2.00/n_in )
         self.b= np.zeros(n_out)
         self.dW= np.zeros_like(self.W)
-        self.dB=np.zeros_like(self.b)
+        self.db = np.zeros_like(self.b)
 
 
     def forward(self, X):   #calcular Z
@@ -24,7 +24,7 @@ class Lineal:
         return dZ @ self.W.T
 
     def params(self):
-        return [(self.W, self.dW), (self.b, self.dB)]
+        return [(self.W, self.dW), (self.b, self.db)]
 
 
 class ReLU:
